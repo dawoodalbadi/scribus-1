@@ -280,9 +280,36 @@ void PagePalette_Pages::rebuildPages()
 	pageView->firstP = counter;
 	pageView->cols = currView->Doc->pageSets()[currView->Doc->pagePositioning()].Columns;
 	pageList.clear();
+//	int virtualName = 0;
 	for (int a = 0; a < currView->Doc->DocPages.count(); ++a)
 	{
 		str = currView->Doc->DocPages.at(a)->MPageNam;
+//		if (/*PrefsManager::instance()->appPrefs.docSetupPrefs.binding*/currView->Doc->pageBiding() == 1 && pageView->cols>1)
+//		{
+//			if (pageView->cols == 2)
+//			{
+//				if (a == 0)
+//				{
+//					virtualName = 0;
+//				}
+//				else if (a%2 == 0)
+//				{
+//					virtualName = a+1;
+//				}
+//				else
+//				{
+//					virtualName = a-1;
+//				}
+//			}
+//			else if (pageView->cols == 3)
+//			{
+//				virtualName = (pageView->cols * (rowcounter + 1)) - (a) + ( pageView->cols * (rowcounter)) - 1;
+//			}
+//			else {
+//				virtualName = pageView->cols;
+//			}
+//		}
+//		else virtualName = a;
 		SeItem *it = new SeItem(str, a, createIcon(a, str, pix));
 		pageList.append(it);
 		pageView->setItem(rowcounter*rowmult+rowadd, counter*colmult+coladd, (QTableWidgetItem *)it);
