@@ -69,6 +69,8 @@ public:
 	double topMargin() const { return Margins.top(); }
 	double bottomMargin() const { return Margins.bottom(); }
 	double rightMargin() const { return Margins.right(); }
+	int binding(){return m_binding;}
+	void setBinding(int bi){m_binding = bi;}
 
 	MarginStruct Margins;
 	MarginStruct initialMargins;
@@ -116,6 +118,7 @@ protected:
 	double m_initialHeight;
 	int m_pageNr;
 	int m_orientation;
+	int m_binding;
 	//! Name of this page, currently only allowed to be used by a master page
 	QString m_PageName;
 	ScribusDoc* m_Doc;	

@@ -2395,7 +2395,7 @@ void ScribusDoc::restoreChangePageProperties(SimpleState* state, bool isUndo)
 				state->getDouble("OLD_PAGE_INITIALLEFT"), state->getDouble("OLD_PAGE_INITIALRIGHT"),
 				state->getDouble("OLD_PAGE_INITIALHEIGHT"), state->getDouble("OLD_PAGE_INITIALWIDTH"),
 				state->getDouble("OLD_PAGE_HEIGHT"), state->getDouble("OLD_PAGE_WIDTH"), state->getInt("OLD_PAGE_ORIENTATION"),
-				state->get("OLD_PAGE_SIZE"), state->getInt("OLD_PAGE_MARGINPRESET"), state->getBool("OLD_PAGE_MOVEOBJECTS"), state->getInt("PAGE_NUM"), state->getInt("OLD_PAGE_TYPE"));
+				state->get("OLD_PAGE_SIZE"), state->getInt("OLD_PAGE_MARGINPRESET"), state->getBool("OLD_PAGE_MOVEOBJECTS"), state->getInt("OLD_PAGE_BINDING"), state->getInt("PAGE_NUM"), state->getInt("OLD_PAGE_TYPE"));
 	}
 	else
 	{
@@ -2404,7 +2404,7 @@ void ScribusDoc::restoreChangePageProperties(SimpleState* state, bool isUndo)
 				state->getDouble("NEW_PAGE_INITIALLEFT"), state->getDouble("NEW_PAGE_INITIALRIGHT"),
 				state->getDouble("NEW_PAGE_INITIALHEIGHT"), state->getDouble("NEW_PAGE_INITIALWIDTH"),
 				state->getDouble("NEW_PAGE_HEIGHT"), state->getDouble("NEW_PAGE_WIDTH"), state->getInt("NEW_PAGE_ORIENTATION"),
-				state->get("NEW_PAGE_SIZE"), state->getInt("NEW_PAGE_MARGINPRESET"), state->getBool("OLD_PAGE_MOVEOBJECTS"), state->getInt("PAGE_NUM"), state->getInt("NEW_PAGE_TYPE"));
+				state->get("NEW_PAGE_SIZE"), state->getInt("NEW_PAGE_MARGINPRESET"), state->getBool("OLD_PAGE_MOVEOBJECTS"), state->getInt("NEW_PAGE_BINDING"), state->getInt("PAGE_NUM"), state->getInt("NEW_PAGE_TYPE"));
 	}
 	setMasterPageMode(oldMPMode);
 	setCurrentPage(oldPage);
@@ -2628,6 +2628,7 @@ ScPage* ScribusDoc::addPage(const int pageIndex, const QString& masterPageName, 
 	addedPage->setPageNr(pageIndex);
 	addedPage->m_pageSize = m_docPrefsData.docSetupPrefs.pageSize;
 	addedPage->setOrientation(m_docPrefsData.docSetupPrefs.pageOrientation);
+	addedPage->setBinding(m_docPrefsData.docSetupPrefs.binding);
 	addedPage->marginPreset = m_docPrefsData.docSetupPrefs.marginPreset;
 	DocPages.insert(pageIndex, addedPage);
 	assert(DocPages.at(pageIndex)!=NULL);
@@ -2650,6 +2651,7 @@ ScPage* ScribusDoc::addMasterPage(const int pageNumber, const QString& pageName)
 	addedPage->initialMargins = m_docPrefsData.docSetupPrefs.margins;
 	addedPage->m_pageSize = m_docPrefsData.docSetupPrefs.pageSize;
 	addedPage->setOrientation(m_docPrefsData.docSetupPrefs.pageOrientation);
+	addedPage->setBinding(m_docPrefsData.docSetupPrefs.binding);
 	addedPage->marginPreset = m_docPrefsData.docSetupPrefs.marginPreset;
 	addedPage->MPageNam = "";
 	int pgN = pageNumber;
@@ -4956,6 +4958,7 @@ bool ScribusDoc::applyMasterPage(const QString& pageName, const int pageNumber)
 		Ap->setHeight(Mp->height());
 		Ap->setWidth(Mp->width());
 		Ap->setOrientation(Mp->orientation());
+		Ap->setBinding(Mp->binding());
 		Ap->m_pageSize = Mp->m_pageSize;
 	}
 	//TODO make a return false if not possible to apply the master page
@@ -5041,7 +5044,7 @@ bool ScribusDoc::save(const QString& fileName, QString* savedFile)
 }
 
 
-bool ScribusDoc::changePageProperties(const double initialTop, const double initialBottom, const double initialLeft, const double initialRight, const double initialHeight, const double initialWidth, const double height, const double width, const int orientation, const QString& pageSize, const int marginPreset, const bool moveObjects, const int pageNumber, const int pageType)
+bool ScribusDoc::changePageProperties(const double initialTop, const double initialBottom, const double initialLeft, const double initialRight, const double initialHeight, const double initialWidth, const double height, const double width, const int orientation, const QString& pageSize, const int marginPreset, const bool moveObjects, int binding, const int pageNumber, const int pageType)
 {
 	bool retVal=true;
 	if (pageNumber==-1)
@@ -5070,6 +5073,7 @@ bool ScribusDoc::changePageProperties(const double initialTop, const double init
 				ss->set("OLD_PAGE_HEIGHT", currentPage()->height());
 				ss->set("OLD_PAGE_WIDTH", currentPage()->width());
 				ss->set("OLD_PAGE_ORIENTATION", currentPage()->orientation());
+				ss->set("OLD_PAGE_BINDING", currentPage()->binding());
 				ss->set("OLD_PAGE_SIZE", currentPage()->m_pageSize);
 				ss->set("OLD_PAGE_TYPE", currentPage()->LeftPg);
 				ss->set("OLD_PAGE_MARGINPRESET", currentPage()->marginPreset);
@@ -5083,6 +5087,7 @@ bool ScribusDoc::changePageProperties(const double initialTop, const double init
 				ss->set("NEW_PAGE_HEIGHT", height);
 				ss->set("NEW_PAGE_WIDTH", width);
 				ss->set("NEW_PAGE_ORIENTATION", orientation);
+				ss->set("NEW_PAGE_BINDING", binding);
 				ss->set("NEW_PAGE_SIZE", pageSize);
 				ss->set("NEW_PAGE_TYPE", pageType);
 				ss->set("NEW_PAGE_MARGINPRESET", marginPreset);
@@ -6266,305 +6271,192 @@ struct oldPageVar
 // without running this monster
 void ScribusDoc::reformPages(bool moveObjects)
 {
-//	 m_binding = m_docPrefsData.docSetupPrefs.binding;
+	//	 m_binding = m_docPrefsData.docSetupPrefs.binding;
 	QMap<uint, oldPageVar> pageTable;
 	struct oldPageVar oldPg;
 	int counter = pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].FirstPage;
 	int rowcounter = 0;
-	double maxYPos=0.0, maxXPos=0.0;
-	if(m_docPrefsData.docSetupPrefs.binding == 1)
-	{
-		double currentXPos=m_docPrefsData.displayPrefs.scratch.left() + m_docPrefsData.docSetupPrefs.pageWidth, currentYPos=m_docPrefsData.displayPrefs.scratch.top(), lastYPos=Pages->at(0)->initialHeight();
+	double maxYPos=0.0, maxXPos=0.0, currentXPos = 0.0, currentYPos = 0.0, lastYPos = 0.0;
+	if(m_docPrefsData.docSetupPrefs.binding == 1){
+		currentXPos=m_docPrefsData.displayPrefs.scratch.left() + m_docPrefsData.docSetupPrefs.pageWidth;
+		currentYPos=m_docPrefsData.displayPrefs.scratch.top();
+		lastYPos=Pages->at(0)->initialHeight();
 		//	currentXPos += (pageWidth+pageSets[currentPageLayout].GapHorizontal) * counter;
 		currentXPos -= (m_docPrefsData.docSetupPrefs.pageWidth+m_docPrefsData.displayPrefs.pageGapHorizontal) * counter;
-
-		lastYPos = Pages->at(0)->initialHeight();
-		ScPage* page;
-		int docPageCount=Pages->count();
-		for (int i = 0; i < docPageCount; ++i)
-		{
-			page = Pages->at(i);
-			oldPg.oldXO = page->xOffset();
-			oldPg.oldYO = page->yOffset();
-			oldPg.newPg = i;
-			pageTable.insert(page->pageNr(), oldPg);
-			page->setPageNr(i);
-			if (masterPageMode())
-			{
-				page->setXOffset(m_docPrefsData.displayPrefs.scratch.left());
-				page->setYOffset(m_docPrefsData.displayPrefs.scratch.top());
-				if (page->LeftPg == 0)
-				{
-					page->Margins.setRight(page->initialMargins.right());
-					page->Margins.setLeft(page->initialMargins.left());
-				}
-				else if ((page->LeftPg > 1) && (page->LeftPg < pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns))
-				{
-					page->Margins.setLeft(page->initialMargins.left());
-					page->Margins.setRight(page->initialMargins.left());
-				}
-				else
-				{
-					page->Margins.setLeft(page->initialMargins.right());
-					page->Margins.setRight(page->initialMargins.left());
-				}
-			}
-			else
-			{
-				page->setWidth(page->initialWidth());
-				page->setHeight(page->initialHeight());
-				page->setXOffset(currentXPos);
-				page->setYOffset(currentYPos);
-				if (counter < pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns-1)
-				{
-					currentXPos -= page->width() + m_docPrefsData.displayPrefs.pageGapHorizontal;
-					lastYPos = qMax(lastYPos, page->height());
-					if (counter == 0)
-					{
-						page->Margins.setLeft(page->initialMargins.left());
-						page->Margins.setRight(page->initialMargins.right());
-					}
-					else
-					{
-						page->Margins.setLeft(page->initialMargins.right());
-						page->Margins.setRight(page->initialMargins.right());
-					}
-				}
-				else
-				{
-					currentXPos = m_docPrefsData.displayPrefs.scratch.left() + m_docPrefsData.docSetupPrefs.pageWidth;
-					if (pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns > 1)
-						currentYPos += qMax(lastYPos, page->height())+m_docPrefsData.displayPrefs.pageGapVertical;
-					else
-						currentYPos += page->height()+m_docPrefsData.displayPrefs.pageGapVertical;
-					lastYPos = 0;
-					page->Margins.setRight(page->initialMargins.left());
-					page->Margins.setLeft(page->initialMargins.right());
-				}
-				counter++;
-				if (counter > pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns-1)
-				{
-					counter = 0;
-					rowcounter++;
-					if (rowcounter > pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Rows-1)
-						rowcounter = 0;
-				}
-			}
-			page->Margins.setTop(page->initialMargins.top());
-			page->Margins.setBottom(page->initialMargins.bottom());
-			maxXPos = qMax(maxXPos, page->xOffset()+page->width()+m_docPrefsData.displayPrefs.scratch.right());
-			maxYPos = qMax(maxYPos, page->yOffset()+page->height()+m_docPrefsData.displayPrefs.scratch.bottom());
-		}
-		if (!isLoading())
-		{
-			m_undoManager->setUndoEnabled(false);
-			this->beginUpdate();
-			int docItemsCount = Items->count();
-			for (int ite = 0; ite < docItemsCount; ++ite)
-			{
-				PageItem *item = Items->at(ite);
-				if (item->OwnPage < 0)
-				{
-					if (item->isGroup())
-						GroupOnPage(item);
-					else
-						item->OwnPage = OnPage(item);
-				}
-				else if (moveObjects)
-				{
-					oldPg = pageTable[item->OwnPage];
-					item->moveBy(-oldPg.oldXO + Pages->at(oldPg.newPg)->xOffset(), -oldPg.oldYO + Pages->at(oldPg.newPg)->yOffset());
-					item->OwnPage = static_cast<int>(oldPg.newPg);
-					if (item->isGroup())
-					{
-						QList<PageItem*> groupItems = item->groupItemList;
-						while (groupItems.count() > 0)
-						{
-							PageItem* groupItem = groupItems.takeAt(0);
-							if (groupItem->isGroup())
-								groupItems += groupItem->groupItemList;
-							if (groupItem->OwnPage < 0)
-								continue;
-							oldPg = pageTable[groupItem->OwnPage];
-							groupItem->OwnPage = static_cast<int>(oldPg.newPg);
-						}
-					}
-				}
-				else
-				{
-					if (item->isGroup())
-						GroupOnPage(item);
-					else
-						item->OwnPage = OnPage(item);
-				}
-				item->setRedrawBounding();
-			}
-			this->endUpdate();
-			m_undoManager->setUndoEnabled(true);
-		}
-
-		if (isLoading() && is12doc)
-			return;
-		if (!isLoading())
-		{
-			updateMarks(true);
-			FPoint minPoint, maxPoint;
-			canvasMinMax(minPoint, maxPoint);
-			FPoint maxSize(qMax(maxXPos, maxPoint.x()+m_docPrefsData.displayPrefs.scratch.right()), qMax(maxYPos, maxPoint.y()+m_docPrefsData.displayPrefs.scratch.bottom()));
-			adjustCanvas(FPoint(qMin(0.0, minPoint.x()-m_docPrefsData.displayPrefs.scratch.left()),qMin(0.0, minPoint.y()-m_docPrefsData.displayPrefs.scratch.top())), maxSize, true);
-			changed();
-		}
-		else
-		{
-			FPoint maxSize(maxXPos, maxYPos);
-			adjustCanvas(FPoint(0, 0), maxSize);
-		}}
+	}
 	else{
-		double currentXPos=m_docPrefsData.displayPrefs.scratch.left(), currentYPos=m_docPrefsData.displayPrefs.scratch.top(), lastYPos=Pages->at(0)->initialHeight();
-		//	currentXPos += (pageWidth+pageSets[currentPageLayout].GapHorizontal) * counter;
+		currentXPos = m_docPrefsData.displayPrefs.scratch.left();
+		currentYPos=m_docPrefsData.displayPrefs.scratch.top();
+		lastYPos=Pages->at(0)->initialHeight();
+		//      currentXPos += (pageWidth+pageSets[currentPageLayout].GapHorizontal) * counter;
 		currentXPos += (m_docPrefsData.docSetupPrefs.pageWidth+m_docPrefsData.displayPrefs.pageGapHorizontal) * counter;
-
-		lastYPos = Pages->at(0)->initialHeight();
-		ScPage* page;
-		int docPageCount=Pages->count();
-		for (int i = 0; i < docPageCount; ++i)
+	}
+	lastYPos = Pages->at(0)->initialHeight();
+	ScPage* page;
+	int docPageCount=Pages->count();
+	for (int i = 0; i < docPageCount; ++i)
+	{
+		page = Pages->at(i);
+		oldPg.oldXO = page->xOffset();
+		oldPg.oldYO = page->yOffset();
+		oldPg.newPg = i;
+		pageTable.insert(page->pageNr(), oldPg);
+		page->setPageNr(i);
+		if (masterPageMode())
 		{
-			page = Pages->at(i);
-			oldPg.oldXO = page->xOffset();
-			oldPg.oldYO = page->yOffset();
-			oldPg.newPg = i;
-			pageTable.insert(page->pageNr(), oldPg);
-			page->setPageNr(i);
-			if (masterPageMode())
+			page->setXOffset(m_docPrefsData.displayPrefs.scratch.left());
+			page->setYOffset(m_docPrefsData.displayPrefs.scratch.top());
+			if (page->LeftPg == 0)
 			{
-				page->setXOffset(m_docPrefsData.displayPrefs.scratch.left());
-				page->setYOffset(m_docPrefsData.displayPrefs.scratch.top());
-				if (page->LeftPg == 0)
-				{
-					page->Margins.setRight(page->initialMargins.right());
-					page->Margins.setLeft(page->initialMargins.left());
-				}
-				else if ((page->LeftPg > 1) && (page->LeftPg < pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns))
-				{
-					page->Margins.setLeft(page->initialMargins.left());
-					page->Margins.setRight(page->initialMargins.left());
-				}
-				else
-				{
-					page->Margins.setLeft(page->initialMargins.right());
-					page->Margins.setRight(page->initialMargins.left());
-				}
+				page->Margins.setRight(page->initialMargins.right());
+				page->Margins.setLeft(page->initialMargins.left());
+			}
+			else if ((page->LeftPg > 1) && (page->LeftPg < pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns))
+			{
+				page->Margins.setLeft(page->initialMargins.left());
+				page->Margins.setRight(page->initialMargins.left());
 			}
 			else
 			{
-				page->setWidth(page->initialWidth());
-				page->setHeight(page->initialHeight());
-				page->setXOffset(currentXPos);
-				page->setYOffset(currentYPos);
-				if (counter < pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns-1)
-				{
+				page->Margins.setLeft(page->initialMargins.right());
+				page->Margins.setRight(page->initialMargins.left());
+			}
+		}
+		else
+		{
+			page->setWidth(page->initialWidth());
+			page->setHeight(page->initialHeight());
+			page->setXOffset(currentXPos);
+			page->setYOffset(currentYPos);
+			if (counter < pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns-1)
+			{
+				if(m_docPrefsData.docSetupPrefs.binding == 1){
+					currentXPos -= page->width() + m_docPrefsData.displayPrefs.pageGapHorizontal;
+				}
+				else{
 					currentXPos += page->width() + m_docPrefsData.displayPrefs.pageGapHorizontal;
-					lastYPos = qMax(lastYPos, page->height());
-					if (counter == 0)
-					{
+				}
+				lastYPos = qMax(lastYPos, page->height());
+				if (counter == 0)
+				{
+					if(m_docPrefsData.docSetupPrefs.binding == 1){
+						page->Margins.setLeft(page->initialMargins.left());
+						page->Margins.setRight(page->initialMargins.right());
+					}
+					else {
 						page->Margins.setLeft(page->initialMargins.right());
 						page->Margins.setRight(page->initialMargins.left());
 					}
-					else
-					{
+				}
+				else
+				{
+					if(m_docPrefsData.docSetupPrefs.binding == 1){
+						page->Margins.setLeft(page->initialMargins.right());
+						page->Margins.setRight(page->initialMargins.right());
+					}
+					else{
 						page->Margins.setLeft(page->initialMargins.left());
 						page->Margins.setRight(page->initialMargins.left());
 					}
 				}
+			}
+			else
+			{
+				if(m_docPrefsData.docSetupPrefs.binding == 1)
+					currentXPos = m_docPrefsData.displayPrefs.scratch.left() + m_docPrefsData.docSetupPrefs.pageWidth;
 				else
-				{
 					currentXPos = m_docPrefsData.displayPrefs.scratch.left();
-					if (pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns > 1)
-						currentYPos += qMax(lastYPos, page->height())+m_docPrefsData.displayPrefs.pageGapVertical;
-					else
-						currentYPos += page->height()+m_docPrefsData.displayPrefs.pageGapVertical;
-					lastYPos = 0;
+				if (pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns > 1)
+					currentYPos += qMax(lastYPos, page->height())+m_docPrefsData.displayPrefs.pageGapVertical;
+				else
+					currentYPos += page->height()+m_docPrefsData.displayPrefs.pageGapVertical;
+				lastYPos = 0;
+				if(m_docPrefsData.docSetupPrefs.binding == 1){
+					page->Margins.setRight(page->initialMargins.left());
+					page->Margins.setLeft(page->initialMargins.right());
+				}
+				else{
 					page->Margins.setRight(page->initialMargins.right());
 					page->Margins.setLeft(page->initialMargins.left());
 				}
-				counter++;
-				if (counter > pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns-1)
-				{
-					counter = 0;
-					rowcounter++;
-					if (rowcounter > pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Rows-1)
-						rowcounter = 0;
-				}
 			}
-			page->Margins.setTop(page->initialMargins.top());
-			page->Margins.setBottom(page->initialMargins.bottom());
-			maxXPos = qMax(maxXPos, page->xOffset()+page->width()+m_docPrefsData.displayPrefs.scratch.right());
-			maxYPos = qMax(maxYPos, page->yOffset()+page->height()+m_docPrefsData.displayPrefs.scratch.bottom());
-		}
-		if (!isLoading())
-		{
-			m_undoManager->setUndoEnabled(false);
-			this->beginUpdate();
-			int docItemsCount = Items->count();
-			for (int ite = 0; ite < docItemsCount; ++ite)
+			counter++;
+			if (counter > pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Columns-1)
 			{
-				PageItem *item = Items->at(ite);
-				if (item->OwnPage < 0)
+				counter = 0;
+				rowcounter++;
+				if (rowcounter > pageSets()[m_docPrefsData.docSetupPrefs.pagePositioning].Rows-1)
+					rowcounter = 0;
+			}
+		}
+		page->Margins.setTop(page->initialMargins.top());
+		page->Margins.setBottom(page->initialMargins.bottom());
+		maxXPos = qMax(maxXPos, page->xOffset()+page->width()+m_docPrefsData.displayPrefs.scratch.right());
+		maxYPos = qMax(maxYPos, page->yOffset()+page->height()+m_docPrefsData.displayPrefs.scratch.bottom());
+	}
+	if (!isLoading())
+	{
+		m_undoManager->setUndoEnabled(false);
+		this->beginUpdate();
+		int docItemsCount = Items->count();
+		for (int ite = 0; ite < docItemsCount; ++ite)
+		{
+			PageItem *item = Items->at(ite);
+			if (item->OwnPage < 0)
+			{
+				if (item->isGroup())
+					GroupOnPage(item);
+				else
+					item->OwnPage = OnPage(item);
+			}
+			else if (moveObjects)
+			{
+				oldPg = pageTable[item->OwnPage];
+				item->moveBy(-oldPg.oldXO + Pages->at(oldPg.newPg)->xOffset(), -oldPg.oldYO + Pages->at(oldPg.newPg)->yOffset());
+				item->OwnPage = static_cast<int>(oldPg.newPg);
+				if (item->isGroup())
 				{
-					if (item->isGroup())
-						GroupOnPage(item);
-					else
-						item->OwnPage = OnPage(item);
-				}
-				else if (moveObjects)
-				{
-					oldPg = pageTable[item->OwnPage];
-					item->moveBy(-oldPg.oldXO + Pages->at(oldPg.newPg)->xOffset(), -oldPg.oldYO + Pages->at(oldPg.newPg)->yOffset());
-					item->OwnPage = static_cast<int>(oldPg.newPg);
-					if (item->isGroup())
+					QList<PageItem*> groupItems = item->groupItemList;
+					while (groupItems.count() > 0)
 					{
-						QList<PageItem*> groupItems = item->groupItemList;
-						while (groupItems.count() > 0)
-						{
-							PageItem* groupItem = groupItems.takeAt(0);
-							if (groupItem->isGroup())
-								groupItems += groupItem->groupItemList;
-							if (groupItem->OwnPage < 0)
-								continue;
-							oldPg = pageTable[groupItem->OwnPage];
-							groupItem->OwnPage = static_cast<int>(oldPg.newPg);
-						}
+						PageItem* groupItem = groupItems.takeAt(0);
+						if (groupItem->isGroup())
+							groupItems += groupItem->groupItemList;
+						if (groupItem->OwnPage < 0)
+							continue;
+						oldPg = pageTable[groupItem->OwnPage];
+						groupItem->OwnPage = static_cast<int>(oldPg.newPg);
 					}
 				}
-				else
-				{
-					if (item->isGroup())
-						GroupOnPage(item);
-					else
-						item->OwnPage = OnPage(item);
-				}
-				item->setRedrawBounding();
 			}
-			this->endUpdate();
-			m_undoManager->setUndoEnabled(true);
+			else
+			{
+				if (item->isGroup())
+					GroupOnPage(item);
+				else
+					item->OwnPage = OnPage(item);
+			}
+			item->setRedrawBounding();
 		}
+		this->endUpdate();
+		m_undoManager->setUndoEnabled(true);
+	}
 
-		if (isLoading() && is12doc)
-			return;
-		if (!isLoading())
-		{
-			updateMarks(true);
-			FPoint minPoint, maxPoint;
-			canvasMinMax(minPoint, maxPoint);
-			FPoint maxSize(qMax(maxXPos, maxPoint.x()+m_docPrefsData.displayPrefs.scratch.right()), qMax(maxYPos, maxPoint.y()+m_docPrefsData.displayPrefs.scratch.bottom()));
-			adjustCanvas(FPoint(qMin(0.0, minPoint.x()-m_docPrefsData.displayPrefs.scratch.left()),qMin(0.0, minPoint.y()-m_docPrefsData.displayPrefs.scratch.top())), maxSize, true);
-			changed();
-		}
-		else
-		{
-			FPoint maxSize(maxXPos, maxYPos);
-			adjustCanvas(FPoint(0, 0), maxSize);
-		}
+	if (isLoading() && is12doc)
+		return;
+	if (!isLoading())
+	{
+		updateMarks(true);
+		FPoint minPoint, maxPoint;
+		canvasMinMax(minPoint, maxPoint);
+		FPoint maxSize(qMax(maxXPos, maxPoint.x()+m_docPrefsData.displayPrefs.scratch.right()), qMax(maxYPos, maxPoint.y()+m_docPrefsData.displayPrefs.scratch.bottom()));
+		adjustCanvas(FPoint(qMin(0.0, minPoint.x()-m_docPrefsData.displayPrefs.scratch.left()),qMin(0.0, minPoint.y()-m_docPrefsData.displayPrefs.scratch.top())), maxSize, true);
+		changed();
+	}
+	else
+	{
+		FPoint maxSize(maxXPos, maxYPos);
+		adjustCanvas(FPoint(0, 0), maxSize);
 	}
 }
 
@@ -7463,6 +7355,7 @@ void ScribusDoc::copyPage(int pageNumberToCopy, int existingPage, int whereToIns
 		destination->setInitialHeight(from->height());
 		destination->setInitialWidth(from->width());
 		destination->setOrientation(from->orientation());
+		destination->setBinding(from->binding());
 		destination->m_pageSize = from->m_pageSize;
 		//CB: Can possibly partially use the code from applyMasterPage here instead of runnin all of this again..
 		//TODO make a function to do this margin stuff and use elsewhere too
@@ -16422,6 +16315,7 @@ void ScribusDoc::applyPrefsPageSizingAndMargins(bool resizePages, bool resizeMas
 			pp->setWidth(pageWidth());
 			pp->m_pageSize = pageSize();
 			pp->setOrientation(pageOrientation());
+			pp->setBinding(pageBiding());
 		}
 		if (resizePageMargins)
 		{
@@ -16457,6 +16351,7 @@ void ScribusDoc::applyPrefsPageSizingAndMargins(bool resizePages, bool resizeMas
 			pp->setWidth(pageWidth());
 			pp->m_pageSize = pageSize();
 			pp->setOrientation(pageOrientation());
+			pp->setBinding(pageBiding());
 		}
 		if (resizeMasterPageMargins)
 		{

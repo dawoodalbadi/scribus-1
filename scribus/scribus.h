@@ -638,7 +638,7 @@ private:
 	bool m_objectSpecificUndo;
 
 	//CB: #8212: add overrideMasterPageSizing, however default to true for compatibility with other calls.. for now
-	void addNewPages(int wo, int where, int numPages, double height, double width, int orient, QString siz, bool mov, QStringList* basedOn = 0, bool overrideMasterPageSizing=true);
+	void addNewPages(int wo, int where, int numPages, double height, double width, int orient, QString siz, bool mov, int binding, QStringList* basedOn = 0, bool overrideMasterPageSizing=true);
 
 	int m_DocNr;
 	bool m_PrinterUsed;

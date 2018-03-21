@@ -240,6 +240,7 @@ void ScPage::restorePageAttributes(SimpleState *state, bool isUndo)
 	int left = state->getInt("LEFT");
 	QString name = state->get("NAME");
 	int orientation = state->getInt("ORIENTATION");
+	int bindin =state->getInt("PAGEBINDING");
 	QString size =state->get("SIZE");
 	double width = state->getDouble("WIDTH");
 	double height = state->getDouble("HEIGHT");
@@ -295,6 +296,7 @@ void ScPage::restorePageAttributes(SimpleState *state, bool isUndo)
 		this->setPageName(name);
 		this->m_pageSize = size;
 		this->setOrientation(orientation);
+		this->setBinding(bindin);
 		this->setWidth(width);
 		this->setHeight(height);
 		this->setInitialHeight(init_height);

@@ -3332,7 +3332,7 @@ bool ScribusMainWindow::slotPageImport()
 			startPage = dia->getImportWherePage() + 1;
 		else
 			startPage = doc->DocPages.count() + 1;
-		addNewPages(dia->getImportWherePage(), importWhere, nrToImport, doc->pageHeight(), doc->pageWidth(), doc->pageOrientation(), doc->pageSize(), true);
+		addNewPages(dia->getImportWherePage(), importWhere, nrToImport, doc->pageHeight(), doc->pageWidth(), doc->pageOrientation(), doc->pageSize(), true,doc->pageBiding());
 	}
 	else
 	{
@@ -3358,7 +3358,7 @@ bool ScribusMainWindow::slotPageImport()
 			{
 				addNewPages(doc->DocPages.count(), 2,
 							nrToImport - (doc->DocPages.count() - doc->currentPage()->pageNr()),
-							doc->pageHeight(), doc->pageWidth(), doc->pageOrientation(), doc->pageSize(), true);
+							doc->pageHeight(), doc->pageWidth(), doc->pageOrientation(), doc->pageSize(), true, doc->pageBiding());
 			}
 			else if (msgBox.clickedButton() == importButton)
 			{
@@ -3777,6 +3777,7 @@ bool ScribusMainWindow::loadDoc(QString fileName)
 			addedPage->initialMargins = docPage->initialMargins;
 			addedPage->LeftPg = docPage->LeftPg;
 			addedPage->setOrientation(docPage->orientation());
+			addedPage->setBinding(docPage->binding());
 		}
 		//Add doc sections if we have none
 		if (doc->sections().count()==0)
@@ -5339,12 +5340,12 @@ void ScribusMainWindow::slotNewPageM()
 		double width=dia->widthSpinBox->value() / doc->unitRatio();
 		int orientation=dia->orientationQComboBox->currentIndex();
 		addNewPages(dia->getWherePage(), dia->getWhere(), dia->getCount(), height, width, orientation, 
-			dia->prefsPageSizeName, dia->moveObjects->isChecked(), &base, dia->overrideMPSizingCheckBox->checkState()==Qt::Checked);
+			dia->prefsPageSizeName, dia->moveObjects->isChecked(), doc->pageBiding(), &base, dia->overrideMPSizingCheckBox->checkState()==Qt::Checked);
 	}
 	delete dia;
 }
 
-void ScribusMainWindow::addNewPages(int wo, int where, int numPages, double height, double width, int orient, QString siz, bool mov, QStringList* basedOn, bool overrideMasterPageSizing)
+void ScribusMainWindow::addNewPages(int wo, int where, int numPages, double height, double width, int orient, QString siz, bool mov, int binding, QStringList* basedOn, bool overrideMasterPageSizing)
 {
 	UndoTransaction activeTransaction;
 	if (UndoManager::undoEnabled())
@@ -5371,6 +5372,7 @@ void ScribusMainWindow::addNewPages(int wo, int where, int numPages, double heig
 		ss->set("HEIGHT", height);
 		ss->set("WIDTH", width);
 		ss->set("ORIENT", orient);
+		ss->set("BIND", binding);
 		ss->set("SIZE", siz);
 		ss->set("MOVED", mov);
 		m_undoManager->action(this, ss);
@@ -5435,6 +5437,7 @@ void ScribusMainWindow::addNewPages(int wo, int where, int numPages, double heig
 			doc->currentPage()->setInitialHeight(height);
 			doc->currentPage()->setInitialWidth(width);
 			doc->currentPage()->setOrientation(orient);
+			doc->currentPage()->setBinding(binding);
 			doc->currentPage()->m_pageSize = siz;
 		}
 		//CB If we want to add this master page setting into the slotnewpage call, the pagenumber must be +1 I think
@@ -6302,7 +6305,7 @@ void ScribusMainWindow::changePageProperties()
 		lp = dia->pageOrder();
 	doc->changePageProperties(dia->top(), dia->bottom(), dia->left(), dia->right(),
 							pageHeight, pageWidth, pageHeight, pageWidth, orientation,
-							pageSizeName, dia->getMarginPreset(), dia->getMoveObjects(), doc->currentPage()->pageNr(), lp);
+							pageSizeName, dia->getMarginPreset(), dia->getMoveObjects(), doc->pageBiding(), doc->currentPage()->pageNr(), lp);
 	if (!doc->masterPageMode() && dia->masterPage() != currPageMasterPageName)
 		Apply_MasterPage(dia->masterPage(), doc->currentPage()->pageNr());
 	doc->updateEndnotesFrames();
@@ -7941,7 +7944,7 @@ void ScribusMainWindow::restoreDeletePage(SimpleState *state, bool isUndo)
 		}
 		else
 		{
-			addNewPages(wo, where, 1, doc->pageHeight(), doc->pageWidth(), doc->pageOrientation(), doc->pageSize(), true, &tmpl);
+			addNewPages(wo, where, 1, doc->pageHeight(), doc->pageWidth(), doc->pageOrientation(), doc->pageSize(), true, doc->pageBiding(), &tmpl);
 		}
 		UndoObject *tmp =
 			m_undoManager->replaceObject(state->getUInt("DUMMY_ID"), doc->Pages->at(pagenr - 1));
@@ -7975,6 +7978,7 @@ void ScribusMainWindow::restoreAddPage(SimpleState *state, bool isUndo)
 	double height = state->getDouble("HEIGHT");
 	double width = state->getDouble("WIDTH");
 	int orient = state->getInt("ORIENT");
+	int bindi = state->getInt("BIND");
 	QString siz = state->get("SIZE");
 	bool mov = static_cast<bool>(state->getInt("MOVED"));
 	bool savedMasterPageMode = state->getBool("MASTER_PAGE_MODE");
@@ -8028,7 +8032,7 @@ void ScribusMainWindow::restoreAddPage(SimpleState *state, bool isUndo)
 		}
 		else
 		{
-			addNewPages(wo, where, count, height, width, orient, siz, mov, &based);
+			addNewPages(wo, where, count, height, width, orient, siz, mov, bindi, &based);
 		}
 		for (int i = delFrom - 1; i < delTo; ++i)
 		{

@@ -1569,6 +1569,7 @@ void Scribus150Format::WritePages(ScribusDoc *doc, ScXmlStreamWriter& docu, QPro
 		docu.writeAttribute("MNAM",page->MPageNam);
 		docu.writeAttribute("Size", page->m_pageSize);
 		docu.writeAttribute("Orientation", page->orientation());
+		docu.writeAttribute("PageBinding", page->binding());
 		docu.writeAttribute("LEFT", page->LeftPg);
 		docu.writeAttribute("PRESET", page->marginPreset);
 		docu.writeAttribute("VerticalGuides", GuideManagerIO::writeVerticalGuides(
